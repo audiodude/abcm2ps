@@ -13,7 +13,7 @@ C2D2 E2F2G2{FG}|G4-G6|1.2[M:5/4 (2/4 3/4)]G4{AB}z6:|["last time"A2B2 c6||
 %%multicol new
 %%leftmargin 11.5cm
 %%begintext
-
+%%
 Multi column text on the right after a blank line.
 %%endtext
 %%multicol end
@@ -66,7 +66,7 @@ K:G
 V:1
 [K:G exp ^F ^F, clef=C]
 %%staffbreak 0.2cm
-V:2 clef=F
+V:2 bass
 %%staffbreak 0.2cm
 V:1
 [K:G clef=treble][M:C]SDE FG|AG !alcoda!FEO|DE FES||\
@@ -92,7 +92,6 @@ T:Annotations and guitar chords
 M:C
 L:1/8
 %%gchordbox 1
-%%freegchord 1
 K:C
 "^annotation""gchord in box"CD"_below"EG "<left"cd">right"ec|\
 "@20,-50anywhere"gf"<("">)"ed (c4y)||
