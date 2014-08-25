@@ -630,6 +630,9 @@ static void d_upstaff(struct deco_elt *de)
 			yc = y_get(s->staff, 1, s->x, 0);
 			if (yc < stafft)
 				yc = stafft;
+//			if (s->stem <= 0
+//			 && (s->dots == 0 || ((int) s->y % 6)))
+//				yc -= 2;
 			y_set(s->staff, 1, s->x - dd->wl, w, yc + dd->h);
 			s->ymx = yc + dd->h;
 		}
@@ -1480,27 +1483,28 @@ void draw_deco_staff(void)
 	memset(minmax, 0, sizeof minmax);
 	first_gchord = 0;
 	for (s = tsfirst; s; s = s->ts_next) {
-		struct gch *gch, *gch2;
-		int ix;
+		struct gch *gch;
+		int ix, ig;
 
 		gch = s->gch;
 		if (!gch)
 			continue;
 		if (!first_gchord)
 			first_gchord = s;
-		gch2 = NULL;
+		ig = -1;
 		for (ix = 0; ix < MAXGCH; ix++, gch++) {
 			if (gch->type == '\0')
 				break;
 			if (gch->type != 'g')
 				continue;
-			gch2 = gch;	/* guitar chord closest to the staff */
+			ig = ix;	/* guitar chord closest to the staff */
 			if (gch->y < 0)
 				break;
 		}
-		if (gch2) {
-			w = gch2->w;
-			if (gch2->y >= 0) {
+		if (ig >= 0) {
+			gch = s->gch + ig;
+			w = gch->w;
+			if (gch->y >= 0) {
 				y = y_get(s->staff, 1, s->x, w);
 				if (y > minmax[s->staff].ymax)
 					minmax[s->staff].ymax = y;
@@ -1762,8 +1766,8 @@ void draw_deco_staff(void)
 static void draw_gchord(struct SYMBOL *s,
 			float gchy_min, float gchy_max)
 {
-	struct gch *gch, *gch2;
-	int action, ix, box;
+	struct gch *gch;
+	int action, ix, ig, box;
 	float x, y, w, h, y_above, y_below;
 	float hbox, xboxh, xboxl, yboxh, yboxl, expdx;
 
@@ -1777,18 +1781,19 @@ static void draw_gchord(struct SYMBOL *s,
 	y_above = y_get(s->staff, 1, s->x - 2, w) + 2;
 	y_below = y_get(s->staff, 0, s->x - 2, w) - 2;
 #endif
-	gch2 = NULL;
+	ig = -1;
 	for (ix = 0, gch = s->gch; ix < MAXGCH; ix++, gch++) {
 		if (gch->type == '\0')
 			break;
 		if (gch->type != 'g')
 			continue;
-		gch2 = gch;		/* guitar chord closest to the staff */
+		ig = ix;	/* index of guitar chord closest to the staff */
 		if (gch->y < 0)
 			break;
 	}
-	if (gch2) {
-		if (gch2->y >= 0) {
+	if (ig >= 0) {
+		gch = s->gch + ig;
+		if (gch->y >= 0) {
 			if (y_above < gchy_max)
 				y_above = gchy_max;
 		} else {
@@ -1800,7 +1805,7 @@ static void draw_gchord(struct SYMBOL *s,
 	str_font(s->gch->font);
 	set_font(s->gch->font);			/* needed if scaled staff */
 	set_sscale(s->staff);
-//	action = A_GCHORD;
+	action = A_GCHORD;
 	xboxh = xboxl = s->x;
 	yboxh = -100;
 	yboxl = 100;
@@ -1979,8 +1984,8 @@ void draw_measnb(void)
 				}
 				break;
 			}
-			while (s->staff != staff)
-				s = s->ts_next;
+//			while (s->staff != staff)
+//				s = s->ts_next;
 			if (s->prev->type != CLEF)
 				s = s->prev;
 			x = s->x - s->wl;
@@ -2029,8 +2034,8 @@ void draw_measnb(void)
 		 || (bar_num % cfmt.measurenb) != 0
 		 || !s->next)
 			continue;
-		while (s->staff != staff)
-			s = s->ts_next;
+//		while (s->staff != staff)
+//			s = s->ts_next;
 		if (!any_nb) {
 			any_nb = 1;
 			set_font(MEASUREFONT);
@@ -2133,9 +2138,9 @@ static void draw_notempo(struct SYMBOL *s, int len, float sc)
 		}
 	}
 	if (len < SEMIBREVE) {
-		if (flags <= 0)
+		if (flags <= 0) {
 			a2b(" %d su", STEM);
-		else {
+		} else {
 			a2b(" %d %d sfu", flags, STEM);
 			if (dx < 6)
 				dx = 6;

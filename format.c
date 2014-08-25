@@ -885,11 +885,7 @@ static const struct vpar vpar_tb[] = {
 	{"stemdir", set_std, 2},	/* 4 */
 	{"vocal", set_voc, 3},		/* 5 */
 	{"volume", set_vol, 3},		/* 6 */
-#ifndef WIN32
 	{}
-#else
-	{NULL, NULL, 0}
-#endif
 };
 /* -- set a voice parameter -- */
 void set_voice_param(struct VOICE_S *p_voice,	/* current voice */

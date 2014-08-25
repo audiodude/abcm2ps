@@ -1,0 +1,3 @@
+[submodule "fmt/easynotes"]
+	path = fmt/easynotes
+	url = https://github.com/jcowgar/easynotes.git

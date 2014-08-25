@@ -406,7 +406,7 @@ static int calculate_beam(struct BEAM *bm,
 			if (s->as.type != ABC_T_REST)
 				break;
 			g = s->ts_next;
-			if (g->staff != staff
+			if (!g || g->staff != staff
 			 || g->type != NOTEREST)
 				break;
 //fixme:too much vertical shift if some space above the note
@@ -543,8 +543,8 @@ static void draw_beam(float x1,
 	float y1, dy2;
 
 	s = bm->s1;
-	if ((s->sflags & S_TREM2) && n > s->nflags - s->u
-	 && s->head != H_EMPTY) {
+	if (n > s->nflags - s->u
+	 && (s->sflags & S_TREM2) && s->head != H_EMPTY) {
 		if (s->head >= H_OVAL) {
 			x1 = s->x + 6;
 			x2 = bm->s2->x - 6;
@@ -674,13 +674,14 @@ static void draw_beams(struct BEAM *bm)
 				k2 = k2->prev;
 			x1 = k1->xs;
 			if (k1 == k2) {
-				if (k1 == s1
-				 || (k1->sflags & S_BEAM_BR1)
-				 || ((k1->sflags & S_BEAM_BR2)
-					&& i > 2)) {
+				if (k1 == s1) {
 					x1 += bstub;
 				} else if (k1 == s2) {
 					x1 -= bstub;
+				} else if ((k1->sflags & S_BEAM_BR1)
+				       || ((k1->sflags & S_BEAM_BR2)
+					&& i > 2)) {
+					x1 += bstub;
 				} else {
 					struct SYMBOL *k;
 
@@ -700,7 +701,7 @@ static void draw_beams(struct BEAM *bm)
 							&& k1->dots < k->dots))
 							x1 += bstub;
 						else
-							x1 -= bstub;
+						x1 -= bstub;
 					}
 				}
 			}
@@ -1186,31 +1187,21 @@ static char *rest_tb[NFLAGS_SZ] = {
 	/* if rest alone in the measure, center */
 	x = s->x + s->shhd[0] * cur_scale;
 	if (s->dur == voice_tb[s->voice].meter.wmeasure) {
-		struct SYMBOL *prev;
+		struct SYMBOL *s2;
 
-		if (s->next)
-			x = s->next->x;
+		/* don't use next/prev: there is no bar in voice averlay */
+		s2 = s->ts_next;
+		while (s2 && s2->time != s->time + s->dur)
+			s2 = s2->ts_next;
+		if (s2)
+			x = s2->x;
 		else
 			x = realwidth;
-		prev = s->prev;
-		if (!prev) {
-			prev = s;
-		} else if (prev->type != BAR && !(s->sflags & S_SECOND)) {
-			for (prev = prev->ts_next; ; prev = prev->ts_next) {
-				switch (prev->type) {
-				case CLEF:
-				case KEYSIG:
-				case TIMESIG:
-				case FMTCHG:
-					continue;
-				default:
-					break;
-				}
-				prev = prev->ts_prev;
-				break;
-			}
-		}
-		x = (x + prev->x) * .5;
+		s2 = s;
+		while (!(s2->sflags & S_SEQST))
+			s2 = s2->ts_prev;
+		s2 = s2->ts_prev;
+		x = (x + s2->x) * .5;
 
 		/* center the associated decorations */
 		if (s->as.u.note.dc.n > 0)
@@ -1687,7 +1678,7 @@ static void draw_note(float x,
 				break;
 			}
 		}
-		shhd = s->stem > 0 ? s->shhd[0] : s->shhd[s->nhd]
+		shhd = (s->stem > 0 ? s->shhd[0] : s->shhd[s->nhd])
 			* cur_scale;
 		y = 3 * (s->pits[0] - 18);	/* lower ledger lines */
 		switch (staff_tb[s->staff].clef.stafflines) {
@@ -2997,36 +2988,35 @@ static void draw_note_ties(struct SYMBOL *k1,
 		p1 = k1->pits[m1];
 		m2 = mhead2[i];
 		p2 = k2->pits[m2];
-		if ((k1->as.u.note.ti1[m1] & 0x03) == SL_ABOVE)
-			s = 1;
-		else
-			s = -1;
+		s = (k1->as.u.note.ti1[m1] & 0x03) == SL_ABOVE ? 1 : -1;
 
 		x1 = k1->x;
 		sh = k1->shhd[m1];		/* head shift */
 		if (s > 0) {
-			if (m1 < k1->nhd && k1->pits[m1] + 1 == k1->pits[m1 + 1])
+			if (m1 < k1->nhd && p1 + 1 == k1->pits[m1 + 1])
 				if (k1->shhd[m1 + 1] > sh)
 					sh = k1->shhd[m1 + 1];
 		} else {
-			if (m1 > 0 && k1->pits[m1] == k1->pits[m1 - 1] + 1)
+			if (m1 > 0 && p1 == k1->pits[m1 - 1] + 1)
 				if (k1->shhd[m1 - 1] > sh)
 					sh = k1->shhd[m1 - 1];
 		}
-		x1 += sh;
+//		x1 += sh;
+		x1 += sh * 0.6;
 
 		x2 = k2->x;
 		sh = k2->shhd[m2];
 		if (s > 0) {
-			if (m2 < k2->nhd && k2->pits[m2] + 1 == k2->pits[m2 + 1])
+			if (m2 < k2->nhd && p2 + 1 == k2->pits[m2 + 1])
 				if (k2->shhd[m2 + 1] < sh)
 					sh = k2->shhd[m2 + 1];
 		} else {
-			if (m2 > 0 && k2->pits[m2] == k2->pits[m2 - 1] + 1)
+			if (m2 > 0 && p2 == k2->pits[m2 - 1] + 1)
 				if (k2->shhd[m2 - 1] < sh)
 					sh = k2->shhd[m2 - 1];
 		}
-		x2 += sh;
+//		x2 += sh;
+		x2 += sh * 0.6;
 
 		staff = k1->staff;
 		switch (job) {
@@ -3077,7 +3067,8 @@ static void draw_note_ties(struct SYMBOL *k1,
 				x1 += 4.5;
 				y += ((p & 1) ? 2 : 0) * s;
 			} else {
-				y += ((p & 1) ? 6 : 4) * s;
+//				y += ((p & 1) ? 6 : 4) * s;
+				y += ((p & 1) ? 2 : 0) * s;
 			}
 			if (s > 0) {
 				if (k1->nflags > -2 && k1->stem > 0
@@ -3093,7 +3084,8 @@ static void draw_note_ties(struct SYMBOL *k1,
 				x2 -= 4.5;
 				y += ((p & 1) ? 2 : 0) * s;
 			} else {
-				y += ((p2 & 1) ? 7 : 4) * s;
+//				y += ((p2 & 1) ? 7 : 4) * s;
+				y += ((p2 & 1) ? 2 : 0) * s;
 			}
 			if (s < 0) {
 				if (k2->nflags > -2 && k2->stem < 0
@@ -3336,10 +3328,10 @@ static void draw_all_ties(struct VOICE_S *p_voice)
 			}
 		}
 		if (!s2) {
+			struct SYMBOL *s3;
 
 			/* special case: tie to a combined chord */
 			if (s1->ts_prev && s1->ts_prev->next) {
-				struct SYMBOL *s3;
 				int time;
 
 				s3 = s1->ts_prev->next;	/* previous voice */
@@ -4313,8 +4305,7 @@ static float set_staff(void)
 		}
 	}
 
-	/* output the scale of the voices
-	 * and flag as non empty the staves with tablatures */
+	/* output the scale of the voices */
 	{
 		struct VOICE_S *p_voice;
 
@@ -4323,8 +4314,6 @@ static float set_staff(void)
 				a2b("/scvo%d{gsave %.2f dup scale}!\n",
 				     (int) (p_voice - voice_tb),
 				     p_voice->scale);
-			if (p_voice->tblts[0])
-				empty[p_voice->staff] = 0;
 		}
 	}
 
@@ -4335,9 +4324,7 @@ static float set_staff(void)
 		staff_tb[staff].empty = 1;
 	}
 	if (staff > nstaff)
-//fixme: test: remove the whole staff system if all staves are empty
-//		staff--;			/* one staff, empty */
-		return 0;
+		staff--;			/* one staff, empty */
 
 	y = 0;
 	for (i = 0; i < YSTEP; i++) {
@@ -4349,8 +4336,8 @@ static float set_staff(void)
 	/* draw the parts and tempo indications if any */
 	y += draw_partempo(staff, y);
 
-	staffsep = cfmt.staffsep * 0.5;
-	maxsep = cfmt.maxstaffsep * 0.5;
+	staffsep = cfmt.staffsep * 0.5 +
+			staff_tb[staff].topbar * staff_tb[staff].clef.staffscale;
 	if (y < staffsep)
 		y = staffsep;
 	staff_tb[staff].y = -y;
@@ -4362,11 +4349,10 @@ static float set_staff(void)
 			staff_tb[staff].empty = 1;
 			continue;
 		}
-		if (sy->staff[prev_staff].sep != 0) {
+		if (sy->staff[prev_staff].sep != 0)
 			staffsep = sy->staff[prev_staff].sep;
-		} else {
+		else
 			staffsep = cfmt.sysstaffsep;
-		}
 		if (sy->staff[prev_staff].maxsep != 0)
 			maxsep = sy->staff[prev_staff].maxsep;
 		else
@@ -4935,20 +4921,20 @@ static void set_tie_dir(struct SYMBOL *sym)
 /* in chords with an odd number of notes, the outer noteheads are paired off
  * center notes are tied according to their position in relation to the
  * center line */
-				ntie = ntie / 2 + 1;
+				ntie = ntie / 2;
 				dir = SL_BELOW;
 				for (i = 0; i <= s->nhd; i++) {
 					ti = s->as.u.note.ti1[i];
 					if (ti == 0)
 						continue;
-					if (--ntie == 0) {	/* central tie */
-						if (s->as.u.note.pits[i] >= 22)
+					if (ntie == 0) {	/* central tie */
+						if (s->pits[i] >= 22)
 							dir = SL_ABOVE;
 					}
 					if ((ti & 0x03) == SL_AUTO)
 						s->as.u.note.ti1[i] =
 							(ti & SL_DOTTED) | dir;
-					if (ntie == 0)
+					if (ntie-- == 0)
 						dir = SL_ABOVE;
 				}
 				continue;

@@ -6,8 +6,6 @@
 #define FE_PS 2
 void front_init(int edit,
 		int eol,
-		void include_cb(unsigned char *fn));
+		void include_api(unsigned char *fn));
 unsigned char *frontend(unsigned char *s,
-			int ftype,
-			char *fname,
-			int linenum);
+			int ftype);

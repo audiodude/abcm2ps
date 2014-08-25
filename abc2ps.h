@@ -165,8 +165,7 @@ struct SYMBOL { 		/* struct for a drawable symbol */
 	unsigned char staff;	/* staff (0..nstaff) */
 	unsigned char nhd;	/* number of notes in chord - 1 */
 	int dur;		/* main note duration */
-	signed char pits[MAXHD]; /* pitches for notes
-				  * pits[0] = y base for KEYSIG */
+	signed char pits[MAXHD]; /* pitches for notes */
 	int time;		/* starting time */
 	unsigned int sflags;	/* symbol flags */
 #define S_EOLN		0x0001		/* end of line */
@@ -331,8 +330,8 @@ extern int quiet;		/* quiet mode */
 extern int secure;		/* secure mode */
 extern int annotate;		/* output source references */
 extern int pagenumbers; 	/* write page numbers */
-extern int epsf;		/* 1: EPSF, 2: SVG, 3: embedded ABC */
-extern int svg;			/* 1: SVG, 2: XHTML */
+extern int epsf;		/* EPSF (1) / SVG (2) output */
+extern int svg;			/* SVG (1) or XML (2 - HTML + SVG) output */
 extern int showerror;		/* show the errors */
 
 extern char outfn[FILENAME_MAX]; /* output file name */
@@ -487,7 +486,6 @@ void init_outbuf(int kbsz);
 void close_output_file(void);
 void close_page(void);
 float get_bposy(void);
-void open_fout(void);
 void write_buffer(void);
 int (*output)(FILE *out, const char *fmt, ...)
 #ifdef __GNUC__

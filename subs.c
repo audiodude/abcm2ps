@@ -106,14 +106,24 @@ void error(int sev,	/* 0: warning, 1: error */
 	   char *fmt, ...)
 {
 	va_list args;
+static struct SYMBOL *t;
 
+	if (t != info['T' - 'A']) {
+		char *p;
+
+		t = info['T' - 'A'];
+		p = &t->as.text[2];
+		while (isspace((unsigned char) *p))
+			p++;
+		fprintf(stderr, "   - In tune '%s':\n", p);
+	}
+	fprintf(stderr, sev == 0 ? "Warning " : "Error ");
 	if (s) {
-		if (s->as.fn)
-			fprintf(stderr, "%s:%d:%d: ", s->as.fn,
-					s->as.linenum, s->as.colnum);
+		fprintf(stderr, "in line %d.%d",
+			s->as.linenum, s->as.colnum);
 		s->as.flags |= ABC_F_ERROR;
 	}
-	fprintf(stderr, sev == 0 ? "warning: " : "error: ");
+	fprintf(stderr, ": ");
 	va_start(args, fmt);
 	vfprintf(stderr, fmt, args);
 	va_end(args);
@@ -232,7 +242,7 @@ float tex_str(char *s)
 			}
 			break;
 		case '&':
-			if (*s == '#' && !svg && epsf <= 1) {	/* XML char ref */
+			if (*s == '#' && !svg && epsf != 2) {	/* XML char ref */
 				int j;
 				long v;
 
@@ -333,9 +343,6 @@ static GString *pg_str;
 void pg_init(void)
 {
 	static PangoContext *context;
-
-	/* initialize glib */
-	g_type_init();
 
 	context = pango_font_map_create_context(
 			pango_cairo_font_map_get_default());
@@ -445,7 +452,7 @@ static void str_font_change(int start,
 {
 	struct FONTSPEC *f;
 	int fnum;
-	PangoAttribute *attr1, *attr2;;
+	PangoAttribute *attr1, *attr2;
 
 	f = &cfmt.font_tb[curft];
 	fnum = f->fnum;
@@ -782,6 +789,16 @@ static void str_end(int end)
 	a2b("]arrayshow");
 }
 
+/* check if some non ASCII characters */
+static int non_ascii_p(char *p)
+{
+	while (*p != '\0') {
+		if ((signed char) *p++ < 0)
+			return 1;
+	}
+	return 0;
+}
+
 /* -- output one string -- */
 static void str_ft_out1(char *p, int l)
 {
@@ -813,18 +830,30 @@ static void str_ft_out(char *p, int end)
 	int use_glyph;
 	char *q;
 
-	use_glyph = !svg && epsf <= 1 &&		/* not SVG */
+	use_glyph = !svg && epsf != 2 &&		/* not SVG */
 		 get_font_encoding(curft) == 0;		/* utf-8 */
+	if (use_glyph && non_ascii_p(p)) {
+		if (curft != outft) {
+			str_end(1);
+			a2b(" ");
+			set_font(curft);
+		}
+		str_end(0);
+		if (!(strtx & TX_ARR)) {
+			a2b("[");
+			strtx |= TX_ARR;
+		}
+	}
 	q = p;
 	while (*p != '\0') {
 		if ((unsigned char) *p >= 0x80
 		 && use_glyph) {
 			if (p > q) {
 				str_ft_out1(q, p - q);
-			} else if (curft != outft) {
-				str_end(1);
-				a2b(" ");
-				set_font(curft);
+//			} else if (curft != outft) {
+//				str_end(1);
+//				a2b(" ");
+//				set_font(curft);
 			}
 			str_end(0);
 			if (!(strtx & TX_ARR)) {
@@ -844,7 +873,7 @@ static void str_ft_out(char *p, int end)
 					curft = p[1] - '0';
 					if (curft == 0)
 						curft = defft;
-					use_glyph = !svg && epsf <= 1 &&
+					use_glyph = !svg && epsf != 2 &&
 						 get_font_encoding(curft) == 0;
 				}
 				p += 2;
@@ -871,16 +900,6 @@ static void str_ft_out(char *p, int end)
 		str_ft_out1(q, p - q);
 	if (end && strtx)
 		str_end(1);
-}
-
-/* check if some non ASCII characters */
-static int non_ascii_p(char *p)
-{
-	while (*p != '\0') {
-		if ((signed char) *p++ < 0)
-			return 1;
-	}
-	return 0;
 }
 
 /* -- output a string, handling the font changes -- */
@@ -924,7 +943,7 @@ void str_out(char *p, int action)
 	switch (action) {
 	case A_CENTER:
 	case A_RIGHT:
-		if (!svg && epsf <= 1) {
+		if (!svg && epsf != 2) {
 			a2b("/str{");
 			outft = -1;
 			strop = "strop";
@@ -939,7 +958,7 @@ void str_out(char *p, int action)
 	str_ft_out(p, 1);		/* output the string */
 
 	/* if not left aligned, call the PS function */
-	if (svg || epsf > 1)		/* not for SVG */
+	if (svg || epsf == 2)
 		return;
 	if (action == A_CENTER || action == A_RIGHT) {
 		a2b("}def\n"
@@ -1051,23 +1070,23 @@ void write_text(char *cmd, char *s, int job)
 			if (*p != '\0')
 				*p++ = '\0';
 			if (*s == '\0') {
-				bskip(lineskip + parskip);
+				bskip(parskip);
 				buffer_eob();
 			} else {
 				bskip(lineskip);
+				switch (job) {
+				case A_LEFT:
+					a2b("0 0 M");
+					break;
+				case A_CENTER:
+					a2b("%.1f 0 M", strlw * 0.5);
+					break;
+				default:
+					a2b("%.1f 0 M", strlw);
+					break;
+				}
+				put_str(s, job);
 			}
-			switch (job) {
-			case A_LEFT:
-				a2b("0 0 M");
-				break;
-			case A_CENTER:
-				a2b("%.1f 0 M", strlw * 0.5);
-				break;
-			default:
-				a2b("%.1f 0 M", strlw);
-				break;
-			}
-			put_str(s, job);
 			s = p;
 		}
 		goto skip;
@@ -1144,7 +1163,7 @@ void write_text(char *cmd, char *s, int job)
 				n = nw - 1;
 				if (n <= 0)
 					n = 1;
-				if (svg || epsf > 1)
+				if (svg || epsf == 2)
 					a2b("}def\n"
 						"%.1f jshow"
 						"/strop/show load def str",
@@ -1245,6 +1264,7 @@ void put_words(struct SYMBOL *words)
 	int i, n, have_text, max2col;
 	float middle;
 
+	buffer_eob();
 	str_font(WORDSFONT);
 
 	/* see if we may have 2 columns */
@@ -1323,7 +1343,7 @@ void put_words(struct SYMBOL *words)
 			s2 = s2->next;
 		}
 	}
-	buffer_eob();
+//	buffer_eob();
 }
 
 /* -- output history -- */
@@ -1381,7 +1401,7 @@ static char buf[STRL1];
 	}
 	if (title != info['T' - 'A']
 	 || !(cfmt.fields[0] & (1 << ('X' - 'A'))))
-		title = 0;
+		title = NULL;
 	if (!q
 	 && !title
 	 && !cfmt.titlecaps)
@@ -1419,16 +1439,18 @@ void write_title(struct SYMBOL *s)
 	p = &s->as.text[2];
 	if (*p == '\0')
 		return;
-	p = trim_title(p, s);
 	if (s == info['T' - 'A']) {
 		sz = cfmt.font_tb[TITLEFONT].size;
 		bskip(cfmt.titlespace + sz);
 		str_font(TITLEFONT);
+		a2b("%% --- title");
 	} else {
 		sz = cfmt.font_tb[SUBTITLEFONT].size;
 		bskip(cfmt.subtitlespace + sz);
 		str_font(SUBTITLEFONT);
+		a2b("%% --- titlesub");
 	}
+	a2b(" %s\n", p);
 	if (cfmt.titleleft)
 		a2b("0");
 	else
@@ -1436,6 +1458,7 @@ void write_title(struct SYMBOL *s)
 		     0.5 * ((cfmt.landscape ? cfmt.pageheight : cfmt.pagewidth)
 			- cfmt.leftmargin - cfmt.rightmargin) / cfmt.scale);
 	a2b(" %.1f M ", sz * 0.2);
+	p = trim_title(p, s);
 	put_str(p, cfmt.titleleft ? A_LEFT : A_CENTER);
 }
 
@@ -1513,7 +1536,7 @@ static void write_headform(float lwidth)
 	fmt[j++] = 126;			/* newline */
 	fmt[j] = 127;			/* end of format */
 
-	ya[0] = ya[1] = ya[2] = cfmt.titlespace;;
+	ya[0] = ya[1] = ya[2] = cfmt.titlespace;
 	xa[0] = 0;
 	xa[1] = lwidth * 0.5;
 	xa[2] = lwidth;
@@ -1551,7 +1574,7 @@ static void write_headform(float lwidth)
 			if (i == 125)
 				continue;
 			s = inf_s[i];
-			if (s == 0 || inf_nb[i] == 0)
+			if (!s || inf_nb[i] == 0)
 				continue;
 			j = inf_ft[i];
 			str_font(j);
@@ -1559,12 +1582,21 @@ static void write_headform(float lwidth)
 			f = &cfmt.font_tb[j];
 			sz = f->size * 1.1 + inf_sz[i];
 			y = ya[align] + sz;
-			a2b("%.1f %.1f M ", x, -y);
+			if (s->as.text[2] != '\0') {
+				if (i == 'T' - 'A') {
+					if (s == info['T' - 'A'])
+						a2b("%% --- title");
+					else
+						a2b("%% --- titlesub");
+					a2b(" %s\n", &s->as.text[2]);
+				}
+				a2b("%.1f %.1f M ", x, -y);
+			}
 			if (*p == 125) {	/* concatenate */
 			    p += 2;
 /*fixme: do it work with different fields*/
 			    if (*p == i && p[1] == align
-			     && s->next != 0) {
+			     && s->next) {
 				char buf[256], *r;
 
 				q = s->as.text;
@@ -1597,7 +1629,7 @@ static void write_headform(float lwidth)
 				inf_nb[i]--;
 				p += 2;
 			    } else {
-				put_inf2r(s, 0, align);
+				put_inf2r(s, NULL, align);
 			    }
 			} else if (i == 'Q' - 'A') {	/* special case for tempo */
 				if (align != A_LEFT) {
@@ -1609,9 +1641,9 @@ static void write_headform(float lwidth)
 					a2b("%.1f 0 RM ", w);
 				}
 				write_tempo(s, 0, 0.75);
-				info['Q' - 'A'] = 0;	/* don't display in tune */
+				info['Q' - 'A'] = NULL;	/* don't display in tune */
 			} else {
-				put_inf2r(s, 0, align);
+				put_inf2r(s, NULL, align);
 			}
 			if (inf_s[i] == info['T' - 'A']) {
 				inf_ft[i] = SUBTITLEFONT;
@@ -1652,7 +1684,7 @@ void write_heading(struct abctune *t)
 	float lwidth, down1, down2;
 
 	lwidth = ((cfmt.landscape ? cfmt.pageheight : cfmt.pagewidth)
-			- cfmt.leftmargin - cfmt.rightmargin) / cfmt.scale;
+		- cfmt.leftmargin - cfmt.rightmargin) / cfmt.scale;
 
 	if (cfmt.titleformat && cfmt.titleformat[0] != '\0') {
 		write_headform(lwidth);
@@ -1674,9 +1706,10 @@ void write_heading(struct abctune *t)
 					? info['R' - 'A'] : NULL;
 	if (rhythm) {
 		str_font(COMPOSERFONT);
-		a2b("0 %.1f M ", -cfmt.composerspace);
+		a2b("0 %.1f M ",
+		     -(cfmt.composerspace + cfmt.font_tb[COMPOSERFONT].size));
 		put_inf(rhythm);
-		down1 = cfmt.composerspace;
+		down1 -= cfmt.font_tb[COMPOSERFONT].size;
 	}
 	area = author = NULL;
 	if (t->abc_vers != (2 << 16))
@@ -1746,7 +1779,7 @@ void write_heading(struct abctune *t)
 		}
 		down2 = 0;
 	} else {
-		down2 = cfmt.composerspace;
+		down2 = cfmt.composerspace + cfmt.font_tb[COMPOSERFONT].size;
 	}
 
 	/* parts */
@@ -1821,17 +1854,17 @@ void user_ps_write(void)
 			continue;
 		    }
 		case '%':		/* "%svg " = SVG code */
-//			if (svg || epsf > 1)
+//			if (svg || epsf == 2)
 //				svg_write(t->text, strlen(t->text));
 			fputs(p + 5, fout);
 			fputc('\n', fout);
 			continue;
 		case 'p':		/* PS code for PS output only */
-//			if (secure || svg || epsf > 1)
+//			if (secure || svg || epsf == 2)
 //				continue;
 			break;
 		case 'b':		/* PS code for both PS and SVG */
-			if (svg || epsf > 1) {
+			if (svg || epsf == 2) {
 				svg_write(p + 1, strlen(p + 1));
 				continue;
 			}
@@ -1839,7 +1872,7 @@ void user_ps_write(void)
 //				continue;
 			break;
 		case 's':		/* PS code for SVG output only */
-//			if (!svg && epsf <= 1)
+//			if (!svg && epsf != 2)
 //				continue;
 			svg_write(p + 1, strlen(&t->text[1]));
 			continue;

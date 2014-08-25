@@ -475,7 +475,7 @@ static struct {
 	"	M-7 -6l11 -12h3l-11 12h-3\"/>\n"},
 #define D_mrep2 59
 {	"<g id=\"mrep2\" fill=\"currentColor\">\n"
-	"    <path d=\"M-5.5 -19.5a1.5 1.5 0 0 1 0 3a1.5 1.5 0 0 1 0 -3\n"
+	"    <path d=\"M-5.5 -19.5a1.5 1.5 0 0 1 0 3a1.5 1.5 0 0 1 0 -3\n"
 	"	M5 -7.5a1.5 1.5 0 0 1 0 3a1.5 1.5 0 0 1 0 -3\"/>\n"
 	"    <path d=\"M-7 -4l14 -10m-14 4l14 -10\" stroke=\"currentColor\" stroke-width=\"1.8\" fill=\"none\"/>\n"
 	"</g>\n"},
@@ -500,7 +500,7 @@ static struct {
 	"	c5 -8.5 5.5 4.5 10 -2\n"
 	"	c-5 8.5 -5.5 -4.5 -10 2\"/>\n"},
 #define D_stc 64
-{	"<circle id=\"stc\" fill=\"currentColor\" cx=\"1.2\" cy=\"-3\" r=\"1.2\"/>\n"},
+{	"<circle id=\"stc\" fill=\"currentColor\" cx=\"0\" cy=\"-3\" r=\"1.2\"/>\n"},
 #define D_sld 65
 {	"<path id=\"sld\" fill=\"currentColor\" d=\"\n"
 	"	m-7.2 4.8\n"
@@ -1038,6 +1038,7 @@ void define_svg_symbols(char *title, int num, float w, float h)
 				"<title>%s</title>\n"
 				"</head>\n"
 				"<body>\n",
+				
 				s);
 		}
 		fputs("<p>\n", fout);
@@ -1791,7 +1792,7 @@ stack_dump();
 			h = pop_free_val();
 			fprintf(fout,
 				"<path fill=\"currentColor\"\n"
-				"	d=\"M%.2f %.2fl%.2f%.2fv%.2fl%.2f %.2f\"/>\n",
+				"	d=\"M%.2f %.2fl%.2f %.2fv%.2fl%.2f %.2f\"/>\n",
 				x, y, dx, -dy, h,-dx, dy);
 			return;
 		}
@@ -1813,7 +1814,7 @@ stack_dump();
 					x - w / 2, y - 10, w);
 			}
 			fprintf(fout,
-				"<text font-family=\"Times\" font-size=\"12\" font-style=\"italic\" font-weight=\"normal\"\n"
+				"<text font-family=\"serif\" font-size=\"12\" font-style=\"italic\" font-weight=\"normal\"\n"
 				"	x=\"%.2f\" y=\"%.2f\" text-anchor=\"middle\">%s</text>\n",
 				x, y, s + 1);
 			free(s);
@@ -1885,7 +1886,7 @@ stack_dump();
 			setg(1);
 			y = yoffs - pop_free_val() - 6;
 			x = xoffs + pop_free_val();
-			fprintf(fout, "<text x=\"%.2f\" y=\"%.2f\" font-family=\"Times\" font-size=\"30\"\n"
+			fprintf(fout, "<text x=\"%.2f\" y=\"%.2f\" font-family=\"serif\" font-size=\"30\"\n"
 				"	font-weight=\"bold\" font-style=\"italic\">,</text>\n",
 				x, y);
 			return;
@@ -2065,7 +2066,7 @@ curveto:
 				ps_error = 1;
 				return;
 			}
-			fprintf(fout, "<text font-family=\"Times\" font-size=\"16\" font-weight=\"normal\" font-style=\"normal\"\n"
+			fprintf(fout, "<text font-family=\"serif\" font-size=\"16\" font-weight=\"normal\" font-style=\"normal\"\n"
 				"	x=\"%.2f\" y=\"%.2f\" text-anchor=\"middle\">%s</text>\n",
 				x, y, s + 1);
 			free(s);
@@ -2824,7 +2825,7 @@ moveto:
 				return;
 			}
 			fprintf(fout, "<use x=\"%.2f\" y=\"%.2f\" xlink:href=\"#mrest\"/>\n"
-				"<text font-family=\"Times\" font-size=\"15\" font-weight=\"bold\" font-style=\"normal\"\n"
+				"<text font-family=\"serif\" font-size=\"15\" font-weight=\"bold\" font-style=\"normal\"\n"
 				"	x=\"%.2f\" y=\"%.2f\" text-anchor=\"middle\">%s</text>\n",
 				x, y, x, y - 28, s + 1);
 			free(s);
@@ -2874,7 +2875,7 @@ moveto:
 				x -= 3.5;
 			else
 				x -= 2.5;
-			fprintf(fout, "<text font-family=\"Times\" font-size=\"12\" font-weight=\"normal\" font-style=\"normal\"\n"
+			fprintf(fout, "<text font-family=\"serif\" font-size=\"12\" font-weight=\"normal\" font-style=\"normal\"\n"
 				"	x=\"%.2f\" y=\"%.2f\">8</text>\n",
 				x, y);
 			return;
@@ -2913,7 +2914,7 @@ moveto:
 				ps_error = 1;
 				return;
 			}
-			fprintf(fout, "<text font-family=\"Times\" font-size=\"16\" font-weight=\"bold\" font-style=\"italic\"\n"
+			fprintf(fout, "<text font-family=\"serif\" font-size=\"16\" font-weight=\"bold\" font-style=\"italic\"\n"
 				"	x=\"%.2f\" y=\"%.2f\">%s</text>\n",
 				x, y, s + 1);
 			free(s);
@@ -3218,7 +3219,7 @@ rmoveto:
 			a2 = pop_free_val();
 			a1 = pop_free_val();
 			l2 = pop_free_val();
-			l1 = pop_free_val();	// always '0'
+			l1 = pop_free_val();
 			c6 = pop_free_val();
 			c5 = pop_free_val();
 			c4 = pop_free_val();
@@ -3228,9 +3229,9 @@ rmoveto:
 			fprintf(fout,
 				"<path fill=\"currentColor\"\n"
 				"	d=\"M%.2f %.2fc%.2f %.2f %.2f %.2f %.2f %.2f\n"
-				"	v%.2fc%.2f %.2f %.2f %.2f %.2f %.2f\"/>\n",
+				"	l%.2f %.2fc%.2f %.2f %.2f %.2f %.2f %.2f\"/>\n",
 				m1, m2, a1, -a2, a3, -a4, a5, -a6,
-				-l2, c1, -c2, c3, -c4, c5, -c6);
+				l1, -l2, c1, -c2, c3, -c4, c5, -c6);
 			return;
 		}
 		if (strcmp(op, "SLW") == 0) {
@@ -3388,13 +3389,13 @@ rmoveto:
 				"<path fill=\"currentColor\"\n"
 				"	d=\"",
 				x, y, -h);
-			y -= h;
 			if (n == 1) {
 				fprintf(fout,
-					"M%.2f %.2fc0.6 5.6 9.6 9 5.6 18.4\n"
+					"	M%.2f %.2fc0.6 5.6 9.6 9 5.6 18.4\n"
 					"	c1.6 -6 -1.3 -11.6 -5.6 -12.8\n",
-					x, y);
+					x, y - h);
 			} else {
+				y -= h;
 				while (--n >= 0) {
 					fprintf(fout,
 						"M%.2f %.2fc0.9 3.7 9.1 6.4 6 12.4\n"
@@ -3419,18 +3420,18 @@ rmoveto:
 				"<path fill=\"currentColor\"\n"
 				"	d=\"",
 				x, y, -h);
-			y -= h;
 			if (n == 1) {
 				fprintf(fout,
 					"M%.2f %.2fc0.6 -5.6 9.6 -9 5.6 -18.4\n"
 					"	c1.6 6 -1.3 11.6 -5.6 12.8\n",
-					x, y);
+					x, y - h);
 			} else {
+				y -= h;
 				while (--n >= 0) {
 					fprintf(fout,
-						"M%.2f %.2fc0.9 -3.7 9.1 -6.4 6 -12.4\n"
-						"	c1 5.4 -4.2 8.4 -6 8.4\n",
-						x, y);
+					"M%.2f %.2fc0.9 -3.7 9.1 -6.4 6 -12.4\n"
+					"	c1 5.4 -4.2 8.4 -6 8.4\n",
+					x, y);
 					y -= 5.4;
 				}
 			}
@@ -3492,13 +3493,13 @@ rmoveto:
 				"<path fill=\"currentColor\"\n"
 				"	d=\"",
 				x, y, -h);
-			y -= h;
 			if (n == 1) {
 				fprintf(fout,
 					"M%.2f %.2fc0.6 3.4 5.6 3.8 3 10\n"
 					"	c1.2 -4.4 -1.4 -7 -3 -7\n",
-					x, y);
+					x, y - h);
 			} else {
+				y -= h;
 				while (--n >= 0) {
 					fprintf(fout,
 						"M%.2f %.2fc1 3.2 5.6 2.8 3.2 8\n"
@@ -3523,19 +3524,19 @@ rmoveto:
 				"<path fill=\"currentColor\"\n"
 				"	d=\"",
 				x, y, -h);
-			y -= h;
 			if (n == 1) {
 				fprintf(fout,
 					"M%.2f %.2fc0.6 -3.4 5.6 -3.8 3 -10\n"
 					"	c1.2 4.4 -1.4 7 -3 7\n",
-					x, y);
+					x, y - h);
 			} else {
+				y -= h;
 				while (--n >= 0) {
 					fprintf(fout,
 						"M%.2f %.2fc1 -3.2 5.6 -2.8 3.2 -8\n"
 						"	c1.4 4.8 -2.4 5.4 -3.2 5.2\n",
 						x, y);
-					y -= 3.5;
+						y -= 3.5;
 				}
 			}
 			fprintf(fout, "\"/>\n");
@@ -3571,7 +3572,7 @@ rmoveto:
 			s = pop_free_str();
 			if (s)
 				free(s);
-			fprintf(fout, "<text font-family=\"Times\" font-size=\"14\" font-style=\"italic\" font-weight=\"normal\"\n"
+			fprintf(fout, "<text font-family=\"serif\" font-size=\"14\" font-style=\"italic\" font-weight=\"normal\"\n"
 				"	x=\"%.2f\" y=\"%.2f\">s<tspan\n"
 				"	font-size=\"16\" font-weight=\"bold\">f</tspan>z</text>\n",
 				x, y);
@@ -3648,7 +3649,7 @@ rmoveto:
 				fprintf(fout, "h%.2f", w);
 				if (--n <= 0)
 					break;
-				fprintf(fout, "m-%.2f -6", w);
+				fprintf(fout, "m%.2f -6", -w);
 			}
 			fprintf(fout, "\"/>\n");
 			return;
@@ -3683,9 +3684,9 @@ rmoveto:
 				ps_error = 1;
 				return;
 			}
-			fprintf(fout, "<g font-family=\"Times\" font-size=\"18\" font-weight=\"bold\" font-style=\"normal\"\n"
+			fprintf(fout, "<g font-family=\"serif\" font-size=\"18\" font-weight=\"bold\" font-style=\"normal\"\n"
 				"	transform=\"translate(%.2f,%.2f) scale(1.2,1)\">\n"
-				"	<text y=\"-7\" text-anchor=\"middle\">%s</text>\n"
+				"	<text x=\"0\" y=\"-7\" text-anchor=\"middle\">%s</text>\n"
 				"</g>\n",
 				x, y, s + 1);
 			free(s);
@@ -3825,7 +3826,7 @@ translate:
 			setg(1);
 			y = yoffs - pop_free_val() - 2;
 			x = xoffs + pop_free_val() - 4;
-			fprintf(fout, "<text font-family=\"Times\" font-size=\"16\" font-weight=\"bold\" font-style=\"italic\"\n"
+			fprintf(fout, "<text font-family=\"serif\" font-size=\"16\" font-weight=\"bold\" font-style=\"italic\"\n"
 				"	x=\"%.2f\" y=\"%.2f\">tr</text>\n",
 				x, y);
 			return;
@@ -3852,7 +3853,7 @@ translate:
 				ps_error = 1;
 				return;
 			}
-			fprintf(fout, "<g font-family=\"Times\" font-size=\"16\" font-weight=\"bold\" font-style=\"normal\"\n"
+			fprintf(fout, "<g font-family=\"serif\" font-size=\"16\" font-weight=\"bold\" font-style=\"normal\"\n"
 				"	transform=\"translate(%.2f,%.2f) scale(1.2,1)\">\n"
 				"	<text y=\"-1\" text-anchor=\"middle\">%s</text>\n"
 				"	<text y=\"-13\" text-anchor=\"middle\">%s</text>\n"

@@ -20,21 +20,19 @@
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <time.h>
 #include <string.h>
 #include <ctype.h>
 #include <sys/stat.h>
+#ifdef linux
+#include <unistd.h>
+#endif
 
 #include "abc2ps.h"
 #include "front.h"
-
-#ifdef HAVE_MMAP
-#include <unistd.h>
-#include <sys/mman.h>
-#elif defined(linux)
-#include <unistd.h>
-#endif
 
 /* -- global variables -- */
 
@@ -50,8 +48,8 @@ int quiet;			/* quiet mode */
 int secure;			/* secure mode */
 int annotate;			/* output source references */
 int pagenumbers;		/* write page numbers */
-int epsf;			/* 1: EPSF, 2: SVG, 3: embedded ABC */
-int svg;			/* 1: SVG, 2: XHTML */
+int epsf;			/* for EPSF (1) or SVG (2) output */
+int svg;			/* SVG (1) or XML (2 - HTML + SVG) output */
 int showerror;			/* show the errors */
 
 char outfn[FILENAME_MAX];	/* output file name */
@@ -70,6 +68,7 @@ int ncmdtblt;
 
 /* -- local variables -- */
 
+static char abc_fn[FILENAME_MAX]; /* buffer for ABC file name */
 static char *styd = DEFAULT_FDIR; /* format search directory */
 static int def_fmt_done = 0;	/* default format read */
 static struct SYMBOL notitle;
@@ -206,16 +205,11 @@ static char *read_file(char *fn, char *ext)
 /* call back to handle %%format/%%abc-include - see front.c */
 static void include_cb(unsigned char *fn)
 {
-	static int nbfiles;
+	char abc_fn_sav[FILENAME_MAX];
 
-	if (nbfiles > 2) {
-		error(1, NULL, "Too many included files");
-		return;
-	}
-
-	nbfiles++;
+	strcpy(abc_fn_sav, abc_fn);
 	treat_file((char *) fn, "fmt");
-	nbfiles--;
+	strcpy(abc_fn, abc_fn_sav);
 }
 
 /* -- treat an input file and generate the ABC file -- */
@@ -223,8 +217,13 @@ static void treat_file(char *fn, char *ext)
 {
 	struct abctune *t;
 	char *file, *file2;
-	char *abc_fn;
 	int file_type, l;
+	static int nbfiles;
+
+	if (nbfiles > 2) {
+		error(1, 0, "Too many included files");
+		return;
+	}
 
 	/* initialize if not already done */
 	if (!fout)
@@ -241,190 +240,55 @@ static void treat_file(char *fn, char *ext)
 		}
 		return;
 	}
-	abc_fn = strdup(tex_buf);
 	if (!quiet)
-		fprintf(stderr, "File %s\n", abc_fn);
+		fprintf(stderr, "File %s\n", tex_buf);
 
 	/* convert the strings */
-	l = strlen(abc_fn);
-	if (strcmp(&abc_fn[l - 3], ".ps") == 0) {
+	l = strlen(tex_buf);
+	if (strcmp(&tex_buf[l - 3], ".ps") == 0) {
 		file_type = FE_PS;
-		frontend((unsigned char *) "%%beginps\n", FE_ABC,
-				abc_fn, 0);
-	} else if (strcmp(&abc_fn[l - 4], ".fmt") == 0) {
+		frontend((unsigned char *) "%%beginps\n", 0);
+	} else if (strcmp(&tex_buf[l - 4], ".fmt") == 0) {
 		file_type = FE_FMT;
 	} else {
 		file_type = FE_ABC;
+		strcpy(abc_fn, tex_buf);
 		in_fname = abc_fn;
 		mtime = fmtime;
 	}
 
-	file2 = (char *) frontend((unsigned char *) file, file_type,
-				abc_fn, 0);
+	nbfiles++;
+	file2 = (char *) frontend((unsigned char *) file, file_type);
+	nbfiles--;
 	free(file);
 
 	if (file_type == FE_PS)			/* PostScript file */
-		file2 = (char *) frontend((unsigned char *) "%%endps", FE_ABC,
-				abc_fn, 0);
-	if (ext[0] == 'f')		/* if %%format */
+		file2 = (char *) frontend((unsigned char *) "%%endps", 0);
+
+	if (nbfiles > 0)		/* if %%format */
 		return;			/* don't free the preprocessed buffer */
 
-	if (file_type == FE_ABC)		/* if ABC file */
+//	memcpy(&deco_tune, &deco_glob, sizeof deco_tune);
+	if (file_type == FE_ABC) {		/* if ABC file */
+//		if (!epsf)
+//			open_output_file();
 		clrarena(1);			/* clear previous tunes */
+	}
 	t = abc_parse(file2);
 	free(file2);
 	front_init(0, 0, include_cb);		/* reinit the front-end */
 	if (!t) {
 		if (file_type == FE_ABC)
-			error(1, NULL, "File '%s' is empty!", abc_fn);
+			error(1, NULL, "File '%s' is empty!", tex_buf);
 		return;
 	}
 
 	while (t) {
-		if (t->first_sym)
+		if (t->first_sym)		/*fixme:last tune*/
 			do_tune(t);		/* generate */
 		t = t->next;
 	}
 /*	abc_free(t);	(useless) */
-}
-
-/* -- treat an ABC input file and generate the music -- */
-/* this function also treats ABC in XHTML */
-static void treat_abc_file(char *fn)
-{
-	struct abctune *t;
-	FILE *fin;
-	char *file, *file_tmp, *file_abc;
-	char *abc_fn, *p, *q;
-	size_t fsize, l, l2;
-	int linenum;
-#ifdef HAVE_MMAP
-	int fd;
-#endif
-
-	if (epsf != 3) {
-		treat_file(fn, "abc");		/* not '-z' */
-		return;
-	}
-
-	if (*fn == '\0') {
-		error(1, NULL, "cannot use stdin with -z - aborting");
-		exit(EXIT_FAILURE);
-	}
-
-	fin = open_file(fn, "abc", tex_buf);
-	if (!fin)
-		goto err;
-	if (fseek(fin, 0L, SEEK_END) < 0) {
-		fclose(fin);
-		goto err;
-	}
-	fsize = ftell(fin);
-	rewind(fin);
-#ifdef HAVE_MMAP
-	fd = fileno(fin);
-	file = mmap(NULL, fsize, PROT_READ, MAP_PRIVATE, fd, 0);
-	if (!file)
-		goto err;
-#else
-	file = malloc(fsize);
-	if (!file)
-		goto err;
-	if (fread(file, 1, fsize, fin) != fsize) {
-		free(file);
-		goto err;
-	}
-	fclose(fin);
-#endif
-
-	/* copy the HTML/XML/XHTML file and generate the music */
-	abc_fn = strdup(tex_buf);
-	l = fsize;
-	p = file;
-	linenum = 0;
-	while (l > 0) {
-
-		/* search the start of ABC lines */
-#if 1
-		for (q = p, l2 = l - 10; l2 > 0; l2--, q++) {
-			if (strncmp(q, "\n%abc2", 6) == 0
-//			 || strncmp(q, "\n%%", 3) == 0
-			 || strncmp(q, "\nX:", 3) == 0)
-				break;
-		}
-#else
-		for (q = p, l2 = l - 5; l2 > 0; l2--, q++)
-			if (strncmp(q, "<abc>", 5) == 0)
-				break;
-#endif
-		if (l2 <= 0) {
-			fwrite(p, 1, l, fout);
-			break;
-		}
-		q++;
-		fwrite(p, 1, q - p, fout);
-		l -= q - p;
-		while (p != q) {
-			if (*p++ == '\n')
-				linenum++;
-		}
-
-		/* search the end of ABC lines */
-		for (q = p, l2 = l - 10; l2 > 0; l2--, q++)
-			if (*q == '\n' && q[1] == '<')
-				break;
-		if (l2 <= 0) {
-			error(1, NULL, "no end of ABC sequence");
-			q += 9;
-//			break;
-		}
-		q++;
-
-		/* must copy ... :( */
-		l2 = q - p;
-		file_tmp = malloc(l2 + 1);
-		if (!file_tmp) {
-			error(1, NULL, "out of memory");
-			break;
-		}
-		memcpy(file_tmp, p, l2);
-		file_tmp[l2] = '\0';
-
-		file_abc = (char *) frontend((unsigned char *) file_tmp, FE_ABC,
-						abc_fn, linenum);
-		free(file_tmp);
-
-		clrarena(1);			/* clear previous tunes */
-		t = abc_parse(file_abc);
-		free(file_abc);
-		front_init(0, 0, include_cb);	/* reinit the front-end */
-		if (!t) {
-			error(1, NULL, "no tune");
-		} else {
-			file_initialized = -1;	/* don't put <br/> before first image */
-			while (t) {
-				if (t->first_sym)
-					do_tune(t);
-				t = t->next;
-			}
-		}
-		l -= q - p;
-		while (p != q) {
-			if (*p++ == '\n')
-				linenum++;
-		}
-	}
-
-#ifdef HAVE_MMAP
-	munmap(file, fsize);
-	fclose(fin);
-#else
-	free(file);
-#endif
-	return;
-err:
-	error(1, NULL, "input file %s error %s - aborting", fn, strerror(errno));
-	exit(EXIT_FAILURE);
 }
 
 /* -- read the default format -- */
@@ -489,7 +353,6 @@ static void usage(void)
 		"     -g      produce SVG output, one tune per file\n"
 		"     -v      produce SVG output, one page per file\n"
 		"     -X      produce SVG output in one XHTML file\n"
-		"     -z      produce SVG output from embedded ABC\n"
 		"     -O fff  set outfile name to fff\n"
 		"     -O =    make outfile name from infile/title\n"
 		"     -i      indicate where are the errors\n"
@@ -602,8 +465,7 @@ static void set_opt(char *w, char *v)
 		"%%%c%s %s lock\n", prefix, w, v);
 	if (strcmp(w, "abcm2ps") == 0)
 		prefix = *v;
-	frontend((unsigned char *) tex_buf, FE_ABC,
-			"cmd_line", 0);
+	frontend((unsigned char *) tex_buf, 0);
 }
 
 /* -- main program -- */
@@ -614,9 +476,6 @@ int main(int argc, char **argv)
 
 	if (argc <= 1)
 		usage();
-
-	outfn[0] = '\0';
-	init_outbuf(0);
 
 	/* set the global flags */
 	s_argc = argc;
@@ -659,9 +518,7 @@ int main(int argc, char **argv)
 				svg = 2;	/* SVG/XHTML */
 				epsf = 0;
 				break;
-			case 'k': {
-				int kbsz;
-
+			case 'k':
 				if (p[1] == '\0') {
 					if (--argc <= 0) {
 						error(1, NULL, "No value for '-k' - aborting");
@@ -672,31 +529,6 @@ int main(int argc, char **argv)
 					aaa = p + 1;
 					p += strlen(p) - 1;
 				}
-
-				sscanf(aaa, "%d", &kbsz);
-				init_outbuf(kbsz);
-				break;
-			    }
-			case 'O':
-				if (p[1] == '\0') {
-					if (--argc <= 0) {
-						error(1, NULL, "No value for '-O' - aborting");
-						return EXIT_FAILURE;
-					}
-					aaa = *++argv;
-				} else {
-					aaa = p + 1;
-					p += strlen(p) - 1;
-				}
-				if (strlen(aaa) >= sizeof outfn) {
-					error(1, NULL, "'-O' too large - aborting");
-					return EXIT_FAILURE;
-				}
-				strcpy(outfn, aaa);
-				break;
-			case 'z':
-				epsf = 3;	/* ABC embedded in XML */
-				svg = 0;
 				break;
 			default:
 				if (strchr("aBbDdeFfIjmNOsTw", c)) /* if with arg */
@@ -709,9 +541,18 @@ int main(int argc, char **argv)
 		display_version(0);
 
 	/* initialize */
+	outfn[0] = '\0';
 	clrarena(0);				/* global */
 	clrarena(1);				/* tunes */
 	clrarena(2);				/* generation */
+	if (aaa) {				/* '-k' output buffer size */
+		int kbsz;
+
+		sscanf(aaa, "%d", &kbsz);
+		init_outbuf(kbsz);
+	} else {
+		init_outbuf(0);
+	}
 	abc_init(getarena,			/* alloc */
 		0,				/* free */
 		(void (*)(int level)) lvlarena, /* new level */
@@ -733,12 +574,6 @@ int main(int argc, char **argv)
 	pg_init();
 #endif
 
-	/* if ABC embedded in XML, open the output file */
-	if (epsf == 3) {
-		open_fout();
-		read_def_format();
-	}
-
 	/* parse the arguments - finding a new file, treat the previous one */
 	argc = s_argc;
 	argv = s_argv;
@@ -752,9 +587,8 @@ int main(int argc, char **argv)
 
 			if (p[1] == '\0') {		/* '-' alone */
 				if (in_fname) {
-					treat_abc_file(in_fname);
-					frontend((unsigned char *) "select\n", FE_ABC,
-							"cmd_line", 0);
+					treat_file(in_fname, "abc");
+					frontend((unsigned char *) "select\n", 0);
 				}
 				in_fname = "";		/* read from stdin */
 				continue;
@@ -908,7 +742,6 @@ int main(int argc, char **argv)
 					break;
 				case 'v':
 				case 'X':
-				case 'z':
 					break;
 				case 'x':
 					cfmt.fields[0] |= 1 << ('X' - 'A');
@@ -1060,15 +893,14 @@ int main(int argc, char **argv)
 		}
 
 		if (in_fname) {
-			treat_abc_file(in_fname);
-			frontend((unsigned char *) "select\n", FE_ABC,
-						"cmd_line", 0);
+			treat_file(in_fname, "abc");
+			frontend((unsigned char *) "select\n", 0);
 		}
 		in_fname = p;
 	}
 
 	if (in_fname)
-		treat_abc_file(in_fname);
+		treat_file(in_fname, "abc");
 	if (multicol_start != 0) {		/* lack of %%multicol end */
 		error(1, NULL, "Lack of %%%%multicol end");
 		multicol_start = 0;
