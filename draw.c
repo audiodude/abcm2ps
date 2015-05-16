@@ -661,12 +661,26 @@ static void draw_beams(struct BEAM *bm)
 			for (;;) {
 				if (s == s2)
 					break;
+#if 1
+				if (s->next->type == NOTEREST) {
+					if (s->next->sflags & S_TREM1) {
+						if (s->next->nflags - s->next->u < i)
+							break;
+					} else if (s->next->nflags < i) {
+						break;
+					}
+				}
+				if ((s->next->sflags & S_BEAM_BR1)
+				 || ((s->next->sflags & S_BEAM_BR2) && i > 2))
+					break;
+#else
 				if ((s->next->type == NOTEREST
 				 && s->next->nflags - s->next->u < i)
 				  || (s->next->sflags & S_BEAM_BR1)
 				  || ((s->next->sflags & S_BEAM_BR2)
 					 && i > 2))
 					break;
+#endif
 				s = s->next;
 			}
 			k2 = s;
