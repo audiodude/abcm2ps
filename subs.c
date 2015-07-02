@@ -84,6 +84,8 @@ static short cw_tb[] = {
 	500,500,500,500,500,500,500,500,
 };
 
+extern int quiet;
+
 static struct u_ps {
 	struct u_ps *next;
 	char text[2];
@@ -107,6 +109,8 @@ void error(int sev,	/* 0: warning, 1: error */
 {
 	va_list args;
 static struct SYMBOL *t;
+
+  if(quiet) { return; }
 
 	if (t != info['T' - 'A']) {
 		char *p;

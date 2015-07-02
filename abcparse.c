@@ -37,6 +37,7 @@ static int keep_comment;
 /* global values */
 char *deco_tb[128];		/* decoration names */
 int severity;			/* error severity */
+extern int quiet;
 
 static int abc_vers;		/* abc version */
 static short abc_state;		/* parse state */
@@ -2883,6 +2884,7 @@ static void syntax(char *msg,
 	int n, len, m1, m2, pp;
 	int maxcol = 73;
 
+  if (quiet) { return; }
 	severity = 1;
 	n = q - abc_line;
 	len = strlen(abc_line);
